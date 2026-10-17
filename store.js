@@ -84,7 +84,7 @@ var H={SV:SV,ready:ready,esc:esc,stars:stars,pz:pz,fz:fz,dt:dt,d0:d0,rpc:rpc,not
   +'<form id="fup" class="cardx" hidden novalidate><h2>'+(pro?"Create your pro account":"Create your account")+'</h2>'
   +'<label for="su-n">Your name</label><input id="su-n" autocomplete="name">'
   +(pro?'<label for="su-b">Business name</label><input id="su-b">':'')
-  +'<label for="su-e">Email</label><input id="su-e" type="email" autocomplete="email"><label for="su-ph">Phone'+(pro?'':' (optional)')+'</label><input id="su-ph" type="tel" autocomplete="tel"><label for="su-p">Password (8+ characters)</label><input id="su-p" type="password" autocomplete="new-password">'
+  +'<label for="su-e">Email</label><input id="su-e" type="email" autocomplete="email"><label for="su-ph">Phone</label><input id="su-ph" type="tel" autocomplete="tel" required><label for="su-p">Password (8+ characters)</label><input id="su-p" type="password" autocomplete="new-password">'
   +(pro?'<fieldset><legend>Services you offer</legend>'+SV.map(function(s){return'<label class="ck"><input type="checkbox" name="svc" value="'+esc(s)+'"> '+esc(s)+'</label>'}).join("")+'</fieldset><label for="su-z">Areas you serve</label><input id="su-z" placeholder="ZIP codes or 3-digit prefixes, e.g. 90210, 900-918"><p class="sumline" style="margin:.3rem 0 1rem;font-size:.85rem">You can type full 5-digit ZIP codes (e.g. 90210, 90001). Matching uses the first 3 digits, so each one covers its whole area, and the saved list shows as 3 digits (e.g. 902, 900). Ranges work too: 900-918.</p><label for="su-bio">About you</label><textarea id="su-bio"></textarea>':'')
   +'<p class="err" role="alert"></p><button class="btn">Create account</button></form>'},
  bindAuth:function(root,role,done){
@@ -105,11 +105,11 @@ var H={SV:SV,ready:ready,esc:esc,stars:stars,pz:pz,fz:fz,dt:dt,d0:d0,rpc:rpc,not
     var g=function(i){return root.querySelector("#"+i).value.trim()},f={name:g("su-n"),email:g("su-e"),phone:g("su-ph"),password:root.querySelector("#su-p").value};
     if(!f.name)throw new Error("Enter your name.");
     if(!/^\S+@\S+\.\S+$/.test(f.email))throw new Error("Enter a valid email address.");
+    if(f.phone.replace(/\D/g,"").length<10)throw new Error("Enter a valid phone number (at least 10 digits).");
     if(f.password.length<8)throw new Error("Use a password with at least 8 characters.");
     if(pro){
       var s=[].slice.call(root.querySelectorAll("input[name=svc]:checked")).map(function(x){return x.value}),z=pz(g("su-z"));
       if(!g("su-b"))throw new Error("Enter your business name.");
-      if(!f.phone)throw new Error("Enter a phone number.");
       if(!s.length)throw new Error("Choose at least one service.");
       if(!z.length)throw new Error("Enter at least one ZIP code or prefix you serve.");
       f.pro={biz:g("su-b"),bio:g("su-bio"),services:s,prefixes:z}}

@@ -16,8 +16,8 @@ function leadCard(l){
   var acc=l.status==="accepted";
   return '<article class="cardx"><div class="row"><h3>'+e(l.svc)+'</h3><span class="badge">'+PS[l.status]+'</span></div><p>'+e((l.details||[]).join(", "))+'</p><p class="biz">'+e(l.client_first)+' · ZIP '+e(l.zip)+' · '+e(l.timing||"")+' · '+e(l.freq||"")+' · '+e(H.dt(l.created_at))+'</p>'
   +(l.notes?'<p>“'+e(l.notes)+'”</p>':'')
-  +(acc?'<p><strong>Contact:</strong> '+e(l.client_name)+' · '+e(l.client_email)+(l.client_phone?' · '+e(l.client_phone):'')+'</p>':l.status==="requested"?'<p class="biz">Customer contact details unlock when you accept.</p>':'')
-  +'<div class="bar2"><button class="btn alt sm" data-a="chat" data-r="'+l.request_id+'">Open messages</button>'
+  +(acc?'<p><strong>Contact:</strong> '+e(l.client_name)+' · '+e(l.client_email)+(l.client_phone?' · '+e(l.client_phone):'')+'</p>':l.status==="requested"?'<p class="biz">Messaging and customer contact details unlock when you accept and pay the $20.</p>':'')
+  +'<div class="bar2">'+(acc?'<button class="btn alt sm" data-a="chat" data-r="'+l.request_id+'">Open messages</button>':'')
   +(l.status==="requested"?'<button class="btn sm" data-a="acc" data-o="'+l.offer_id+'">Accept for $20</button><button class="btn alt sm" data-a="dec" data-o="'+l.offer_id+'">Decline (free)</button>':'')+'</div></article>'}
 function render(){
   var nw=leads.filter(function(l){return l.status==="requested"}).length,acc=leads.filter(function(l){return l.status==="accepted"}).length,owed=charges.reduce(function(n,c){return n+c.amount},0),

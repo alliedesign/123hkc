@@ -148,7 +148,8 @@ create policy offers_select on public.offers for select to authenticated
 
 drop policy if exists messages_select on public.messages;
 create policy messages_select on public.messages for select to authenticated
-  using (pro_id = auth.uid() or public.is_client_of(request_id));
+  using (public.is_client_of(request_id)
+         or (pro_id = auth.uid() and exists (select 1 from offers o where o.request_id = messages.request_id and o.pro_id = auth.uid() and o.status = 'accepted')));
 
 drop policy if exists reviews_select on public.reviews;
 create policy reviews_select on public.reviews for select to authenticated using (true);
@@ -189,19 +190,13 @@ end $$;
 -- Client asks one or more pros for a quote. Sends the job details as the first message.
 create or replace function public.request_quotes(p_request uuid, p_pros uuid[]) returns int
 language plpgsql security definer set search_path = public as $$
-declare r requests%rowtype; o offers%rowtype; n int := 0; txt text;
+declare n int;
 begin
-  select * into r from requests where id = p_request and client_id = auth.uid();
-  if not found then raise exception 'Request not found'; end if;
-  txt := 'Hi! I''d like a quote for ' || r.svc || '.'
-    || case when array_length(r.details, 1) > 0 then ' ' || array_to_string(r.details, ', ') || '.' else '' end
-    || ' Timing: ' || coalesce(r.timing, 'flexible') || '. Frequency: ' || coalesce(r.freq, 'not sure') || '.'
-    || case when r.notes <> '' then ' Notes: ' || r.notes else '' end;
-  for o in select * from offers where request_id = p_request and pro_id = any (p_pros) and status = 'offered' for update loop
-    update offers set status = 'requested', updated_at = now() where id = o.id;
-    insert into messages (request_id, pro_id, sender_id, from_role, body) values (p_request, o.pro_id, auth.uid(), 'client', txt);
-    n := n + 1;
-  end loop;
+  if not is_client_of(p_request) then raise exception 'Request not found'; end if;
+  -- Asking for a quote only flags the request. No message is sent; messaging opens after the pro accepts and pays.
+  update offers set status = 'requested', updated_at = now()
+    where request_id = p_request and pro_id = any (p_pros) and status = 'offered';
+  get diagnostics n = row_count;
   return n;
 end $$;
 
@@ -212,12 +207,9 @@ declare o offers%rowtype; body text := btrim(coalesce(p_body, ''));
 begin
   if length(body) = 0 then raise exception 'Message is empty'; end if;
   if is_client_of(p_request) then
-    select * into o from offers where request_id = p_request and pro_id = p_pro for update;
+    select * into o from offers where request_id = p_request and pro_id = p_pro;
     if not found then raise exception 'That pro is not matched to this request'; end if;
-    if o.status = 'declined' then raise exception 'This pro is not available for this job'; end if;
-    if o.status = 'offered' then
-      update offers set status = 'requested', updated_at = now() where id = o.id;
-    end if;
+    if o.status <> 'accepted' then raise exception 'Messaging opens after the pro accepts your request'; end if;
     insert into messages (request_id, pro_id, sender_id, from_role, body) values (p_request, p_pro, auth.uid(), 'client', body);
   elsif p_pro = auth.uid() then
     select * into o from offers where request_id = p_request and pro_id = auth.uid();
