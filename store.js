@@ -1,47 +1,116 @@
 (function(w){
-var K="hkc.v1",SV=["Residential cleaning","Commercial cleaning","Move-in / move-out cleaning","Window cleaning","Pressure washing","Gutter cleaning","Carpet and upholstery cleaning","Air duct and dryer vent cleaning","Lawn care","Pool care"],
-NM=["Jen M.","Alex P.","Sam R.","Chris D.","Taylor B.","Jordan L.","Morgan S.","Casey W."],
-TX=["Showed up on time and did a great job.","Very thorough and friendly. Would hire again.","Communicated clearly and the price matched the quote.","Our place looks fantastic. Highly recommend.","Careful, professional and quick to reply.","Went above and beyond on the details.","Easy to schedule and great results.","Reliable and fair. We booked again."],
-P=[["Maria G.","Sparkle Home Co.",[0,2,6,1,7],"900-918",4.9,212,"Family-run team with 9 years cleaning homes and rentals."],
-["James T.","ClearView Window Pros",[3,4,5,0],"900-935",4.8,164,"Streak-free windows and spotless exteriors since 2014."],
-["Priya S.","Fresh Start Cleaning",[0,2,1,7],"900-935",4.9,98,"Eco-friendly products and detail-focused deep cleans."],
-["Carlos R.","Pacific Pressure & Gutter",[4,5,3,8,9],"900-928",4.7,301,"Driveways, gutters and yards, all done right."],
-["Dana W.","Bright Day Cleaners",[0,1,2,3,6,5],"900-935",4.8,76,"Reliable weekly and biweekly service for busy households."],
-["Tom H.","Green Lawn & Pool",[8,9,4],"900-935",4.6,143,"Lawn and pool care packages with flexible schedules."],
-["Aisha K.","Spotless Spaces",[1,0,2,6,7],"900-935",5.0,41,"Office and home cleaning with after-hours availability."],
-["Luis M.","Blue Water Pool Care",[9,8],"919-935",4.9,188,"Weekly pool service, repairs and water balancing."],
-["Evelyn C.","PureAir Duct & Vent",[7,0,6,5],"900-935",4.8,127,"Duct, dryer vent and carpet cleaning for healthier homes."],
-["Marcus B.","Crown Commercial Cleaning",[1,0,3,4],"900-935",4.7,215,"Commercial crews for offices, retail and restaurants."],
-["Hannah L.","Coastal Clean",[0,3,2,9,8],"900-935",4.9,59,"Beach-area homes, windows and pool care."],
-["Omar F.","Handy Hands Home Care",[0,5,4,6,8,2,7,9],"900-935",4.8,172,"One crew for the whole list: house, gutters, yard and more."]];
-function pz(s){return String(s).split(",").map(function(t){t=t.trim();var m=t.match(/^(\d{3})-(\d{3})$/);if(m)return[+m[1],+m[2]];m=t.match(/^(\d{3})(\d{2})?$/);return m?[+m[1],+m[1]]:null}).filter(Boolean)}
-function fz(a){return a.map(function(r){return r[0]==r[1]?r[0]:r[0]+"-"+r[1]}).join(", ")}
-function uid(p){return p+Math.random().toString(36).slice(2,9)}
-function seed(){var n=Date.now();return{pros:P.map(function(p,i){return{id:"p"+i,name:p[0],biz:p[1],email:"",svc:p[2].map(function(x){return SV[x]}),zips:pz(p[3]),bio:p[6],rating:p[4],count:p[5],shown:0,last:0,reviews:[0,1,2].map(function(k){return{id:"v"+i+k,name:NM[(i*3+k)%8],r:k==2&&i%3==0?4:5,t:TX[(i+k*3)%8],d:new Date(n-(k+1)*864e5*(6+i)).toISOString().slice(0,10)}})}}),requests:[],offers:[],msgs:[],ledger:[]}}
-function load(){var d=null;try{d=JSON.parse(localStorage.getItem(K))}catch(e){}if(!d||!d.pros){d=seed();save(d)}return d}
-function save(d){try{localStorage.setItem(K,JSON.stringify(d))}catch(e){}}
+"use strict";
+var C=w.HKC_CONFIG||{},
+SV=["Residential cleaning","Commercial cleaning","Move-in / move-out cleaning","Window cleaning","Pressure washing","Gutter cleaning","Carpet and upholstery cleaning","Air duct and dryer vent cleaning","Lawn care","Pool care"],
+ready=!!(C.SUPABASE_URL&&C.SUPABASE_ANON_KEY&&w.supabase),
+sb=ready?w.supabase.createClient(C.SUPABASE_URL,C.SUPABASE_ANON_KEY):null;
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function stars(r){return '<span class="stars" style="--r:'+(+r)+'" role="img" aria-label="'+(+r).toFixed(1)+' out of 5 stars">★★★★★</span>'}
-// Fair rotation: pros who have been shown the least go first, then the longest-waiting.
-function submit(q){
-  var d=load(),r=Object.assign({id:uid("r"),ts:Date.now()},q),n=+String(q.zip).slice(0,3);
-  d.requests.push(r);
-  var all=d.pros.filter(function(p){return p.svc.indexOf(q.svc)>-1}),
-  cov=function(p){return p.zips.some(function(z){return n>=z[0]&&n<=z[1]})},
-  ord=function(a,b){return a.shown-b.shown||a.last-b.last},
-  pick=all.filter(cov).sort(ord).concat(all.filter(function(p){return!cov(p)}).sort(ord)).slice(0,5);
-  pick.forEach(function(p){p.shown++;p.last=Date.now();d.offers.push({id:uid("o"),reqId:r.id,proId:p.id,status:"offered",near:cov(p),ts:Date.now()})});
-  save(d);try{localStorage.setItem("hkc.last",r.id)}catch(e){}return r.id}
-function job(r){return"Hi! I’d like a quote for "+r.svc+". "+[].concat(r.q||[]).join(", ")+". Timing: "+r.when+". Frequency: "+r.freq+"."+(r.det?" Notes: "+r.det:"")}
-function msg(reqId,proId,from,text){var d=load();d.msgs.push({id:uid("m"),reqId:reqId,proId:proId,from:from,text:text,ts:Date.now()});
-  if(from==="client")d.offers.forEach(function(o){if(o.reqId===reqId&&o.proId===proId&&o.status==="offered")o.status="requested"});save(d)}
-function contact(reqId,ids){var d=load(),r=d.requests.filter(function(x){return x.id===reqId})[0];save(d);
-  ids.forEach(function(p){var has=load().msgs.some(function(m){return m.reqId===reqId&&m.proId===p});msg(reqId,p,"client",has?"I’d like a quote for this job.":job(r))})}
-function setO(id,st){var d=load();d.offers.forEach(function(o){if(o.id===id){o.status=st;if(st==="accepted")d.ledger.push({id:uid("l"),proId:o.proId,reqId:o.reqId,amount:20,ts:Date.now()})}});save(d)}
-function review(proId,reqId,r,t,name){var d=load(),p=d.pros.filter(function(x){return x.id===proId})[0];
-  p.reviews.unshift({id:uid("v"),name:name,r:r,t:t||"",d:new Date().toISOString().slice(0,10)});p.rating=(p.rating*p.count+r)/(p.count+1);p.count++;
-  d.offers.forEach(function(o){if(o.reqId===reqId&&o.proId===proId)o.reviewed=true});save(d)}
-function addPro(o){var d=load(),p=Object.assign({id:uid("p"),rating:0,count:0,shown:0,last:0,reviews:[]},o);d.pros.push(p);save(d);return p.id}
-function reset(){["hkc.v1","hkc.last","hkc.pro"].forEach(function(k){try{localStorage.removeItem(k)}catch(e){}})}
-w.HKC={SV:SV,load:load,save:save,esc:esc,stars:stars,pz:pz,fz:fz,submit:submit,contact:contact,msg:msg,accept:function(i){setO(i,"accepted")},decline:function(i){setO(i,"declined")},review:review,addPro:addPro,reset:reset}
-})(typeof window!=="undefined"?window:globalThis);
+function pz(s){var o={};String(s||"").split(/[,\s]+/).forEach(function(t){var m=t.match(/^(\d{3})-(\d{3})$/);
+  if(m){var a=+m[1],b=+m[2];if(a>b){var x=a;a=b;b=x}for(var i=a;i<=b;i++)o[i]=1;return}
+  m=t.match(/^(\d{3})(\d{2})?$/);if(m)o[+m[1]]=1});
+  return Object.keys(o).map(Number).sort(function(a,b){return a-b})}
+function fz(a){var r=[],s=null,p=null;(a||[]).forEach(function(n){if(s===null){s=p=n}else if(n===p+1){p=n}else{r.push(s===p?s:s+"-"+p);s=p=n}});if(s!==null)r.push(s===p?s:s+"-"+p);return r.join(", ")}
+function dt(ts){return new Date(ts).toLocaleString([],{month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"})}
+function d0(ts){return new Date(ts).toLocaleDateString([],{month:"short",day:"numeric",year:"numeric"})}
+function need(){if(!sb)throw new Error("The site isn't connected to its database yet. Add your Supabase keys to config.js.")}
+function ok(r){if(r.error)throw new Error(r.error.message||"Something went wrong");return r.data}
+function rpc(n,a){need();return sb.rpc(n,a||{}).then(ok)}
+function notice(){return '<h1>Almost ready</h1><p class="sumline">The site isn’t connected to its database yet. Add your Supabase URL and anon key to <code>config.js</code>, then run <code>supabase-setup.sql</code>. Step-by-step instructions are in <code>SETUP.md</code>.</p>'}
+async function ensureProfile(user){
+  var r=await sb.from("profiles").select("*").eq("id",user.id).maybeSingle();
+  if(r.error)throw new Error(r.error.message);
+  if(r.data)return r.data;
+  var m=user.user_metadata||{},role=m.role==="pro"?"pro":"client",name=String(m.name||user.email.split("@")[0]).trim(),
+  p={id:user.id,role:role,name:name,email:user.email,phone:m.phone||null};
+  ok(await sb.from("profiles").insert(p));
+  if(role==="pro")ok(await sb.from("pros").insert({id:user.id,name:name,biz:m.biz||name,bio:m.bio||"",services:m.services||[],zip_prefixes:m.prefixes||[]}));
+  return p}
+async function boot(){
+  if(!sb)return{ready:false};
+  var s=(await sb.auth.getSession()).data.session;
+  if(!s)return{ready:true,user:null};
+  return{ready:true,user:s.user,profile:await ensureProfile(s.user)}}
+async function signUp(role,f){
+  need();
+  var r=await sb.auth.signUp({email:f.email,password:f.password,options:{data:Object.assign({role:role,name:f.name,phone:f.phone||""},f.pro||{})}});
+  if(r.error)throw new Error(r.error.message);
+  var u=r.data.user;
+  if(u&&u.identities&&!u.identities.length)throw new Error("An account with this email already exists. Log in instead.");
+  if(r.data.session)return{session:true,profile:await ensureProfile(r.data.user)};
+  return{session:false}}
+async function signIn(email,password){
+  need();var r=await sb.auth.signInWithPassword({email:email,password:password});
+  if(r.error)throw new Error(r.error.message==="Invalid login credentials"?"Email or password is incorrect.":r.error.message);
+  return ensureProfile(r.data.user)}
+async function signOut(){need();await sb.auth.signOut()}
+// Booking draft: kept in this browser until the client has an account (e.g. while confirming their email)
+function saveDraft(D){try{localStorage.setItem("hkc.draft",JSON.stringify(D))}catch(e){}}
+function submitRequest(D){return rpc("submit_request",{p_svc:D.svc,p_details:[].concat(D.q||[]),p_timing:D.when||"",p_freq:D.freq||"",p_notes:D.det||"",p_zip:D.zip})}
+async function flushDraft(){
+  var d=null;try{d=JSON.parse(localStorage.getItem("hkc.draft"))}catch(e){}
+  if(!d||!d.svc)return null;
+  var id=await submitRequest(d);try{localStorage.removeItem("hkc.draft")}catch(e){}return id}
+async function proRow(){var s=(await sb.auth.getSession()).data.session;return ok(await sb.from("pros").select("*").eq("id",s.user.id).maybeSingle())}
+function onChange(tables,cb){
+  if(!sb)return function(){};
+  var ch=sb.channel("c"+Math.random().toString(36).slice(2));
+  tables.forEach(function(t){ch.on("postgres_changes",{event:"*",schema:"public",table:t},function(){cb()})});
+  ch.subscribe();return function(){sb.removeChannel(ch)}}
+var H={SV:SV,ready:ready,esc:esc,stars:stars,pz:pz,fz:fz,dt:dt,d0:d0,rpc:rpc,notice:notice,boot:boot,signUp:signUp,signIn:signIn,signOut:signOut,saveDraft:saveDraft,submitRequest:submitRequest,flushDraft:flushDraft,onChange:onChange,
+ request:async function(id){need();return ok(await sb.from("requests").select("*").eq("id",id).maybeSingle())},
+ offersFor:async function(id){need();return ok(await sb.from("offers").select("id,status,reviewed,pro_id,created_at,pros(id,name,biz,bio,services,rating,review_count)").eq("request_id",id).order("created_at"))},
+ reviewsFor:async function(ids){need();return ids.length?ok(await sb.from("reviews").select("*").in("pro_id",ids).order("created_at",{ascending:false})):[]},
+ myRequests:async function(){need();return ok(await sb.from("requests").select("id,svc,zip,timing,freq,notes,details,created_at,offers(id,status,reviewed,pro_id,pros(id,name,biz,rating,review_count))").order("created_at",{ascending:false}))},
+ messages:async function(req,pro){need();var q=sb.from("messages").select("*").order("created_at");if(req)q=q.eq("request_id",req);if(pro)q=q.eq("pro_id",pro);return ok(await q)},
+ sendMessage:function(req,pro,body){return rpc("send_message",{p_request:req,p_pro:pro,p_body:body})},
+ requestQuotes:function(req,pros){return rpc("request_quotes",{p_request:req,p_pros:pros})},
+ respond:function(offer,yes){return rpc("respond_offer",{p_offer:offer,p_accept:yes})},
+ review:function(req,pro,r,t){return rpc("post_review",{p_request:req,p_pro:pro,p_rating:r,p_body:t||""})},
+ leads:function(){return rpc("pro_leads")},
+ proRow:proRow,
+ myReviews:async function(){var p=await proRow();return ok(await sb.from("reviews").select("*").eq("pro_id",p.id).order("created_at",{ascending:false}))},
+ charges:async function(){need();return ok(await sb.from("charges").select("id,amount,created_at,requests(svc)").order("created_at",{ascending:false}))},
+ updateProfile:async function(uid,f){need();ok(await sb.from("profiles").update({name:f.name,phone:f.phone||null}).eq("id",uid))},
+ updatePro:async function(uid,o){need();ok(await sb.from("pros").update(o).eq("id",uid))},
+ authHtml:function(role){
+  var pro=role==="pro";
+  return '<div class="tabs" role="group" aria-label="Account"><button type="button" class="btn alt sm" data-t="in" aria-pressed="true">Log in</button><button type="button" class="btn alt sm" data-t="up" aria-pressed="false">Create account</button></div>'
+  +'<form id="fin" class="cardx" novalidate><h2>Log in</h2><label for="li-e">Email</label><input id="li-e" type="email" autocomplete="email"><label for="li-p">Password</label><input id="li-p" type="password" autocomplete="current-password"><p class="err" role="alert"></p><button class="btn">Log in</button></form>'
+  +'<form id="fup" class="cardx" hidden novalidate><h2>'+(pro?"Create your pro account":"Create your account")+'</h2>'
+  +'<label for="su-n">Your name</label><input id="su-n" autocomplete="name">'
+  +(pro?'<label for="su-b">Business name</label><input id="su-b">':'')
+  +'<label for="su-e">Email</label><input id="su-e" type="email" autocomplete="email"><label for="su-ph">Phone'+(pro?'':' (optional)')+'</label><input id="su-ph" type="tel" autocomplete="tel"><label for="su-p">Password (8+ characters)</label><input id="su-p" type="password" autocomplete="new-password">'
+  +(pro?'<fieldset><legend>Services you offer</legend>'+SV.map(function(s){return'<label class="ck"><input type="checkbox" name="svc" value="'+esc(s)+'"> '+esc(s)+'</label>'}).join("")+'</fieldset><label for="su-z">Areas you serve</label><input id="su-z" placeholder="ZIP codes or 3-digit prefixes, e.g. 900-918, 926"><label for="su-bio">About you</label><textarea id="su-bio"></textarea>':'')
+  +'<p class="err" role="alert"></p><button class="btn">Create account</button></form>'},
+ bindAuth:function(root,role,done){
+  var fin=root.querySelector("#fin"),fup=root.querySelector("#fup"),pro=role==="pro";
+  root.querySelectorAll("[data-t]").forEach(function(b){b.addEventListener("click",function(){
+    var up=b.dataset.t==="up";fin.hidden=up;fup.hidden=!up;
+    root.querySelectorAll("[data-t]").forEach(function(x){x.setAttribute("aria-pressed",x===b)})})});
+  function run(form,fn){form.addEventListener("submit",function(ev){ev.preventDefault();
+    var er=form.querySelector(".err"),btn=form.querySelector(".btn");er.textContent="";btn.disabled=true;
+    fn(er).then(function(){btn.disabled=false}).catch(function(x){er.textContent=x.message;btn.disabled=false})})}
+  run(fin,async function(er){
+    var e=root.querySelector("#li-e").value.trim(),p=root.querySelector("#li-p").value;
+    if(!e||!p)throw new Error("Enter your email and password.");
+    var prof=await signIn(e,p);
+    if(prof.role!==role){await signOut();throw new Error(pro?"This is a client account. Log in on the client page instead.":"This is a pro account. Log in on the pro page instead.")}
+    done(prof)});
+  run(fup,async function(er){
+    var g=function(i){return root.querySelector("#"+i).value.trim()},f={name:g("su-n"),email:g("su-e"),phone:g("su-ph"),password:root.querySelector("#su-p").value};
+    if(!f.name)throw new Error("Enter your name.");
+    if(!/^\S+@\S+\.\S+$/.test(f.email))throw new Error("Enter a valid email address.");
+    if(f.password.length<8)throw new Error("Use a password with at least 8 characters.");
+    if(pro){
+      var s=[].slice.call(root.querySelectorAll("input[name=svc]:checked")).map(function(x){return x.value}),z=pz(g("su-z"));
+      if(!g("su-b"))throw new Error("Enter your business name.");
+      if(!f.phone)throw new Error("Enter a phone number.");
+      if(!s.length)throw new Error("Choose at least one service.");
+      if(!z.length)throw new Error("Enter at least one ZIP code or prefix you serve.");
+      f.pro={biz:g("su-b"),bio:g("su-bio"),services:s,prefixes:z}}
+    var r=await signUp(role,f);
+    if(r.session)done(r.profile);
+    else er.textContent="Almost there. Check your email to confirm your account, then log in here."})}
+};
+w.HKC=H})(window);

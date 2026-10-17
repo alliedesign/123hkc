@@ -133,6 +133,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:1rem}
       <a href="#services">Services</a>
       <a href="#how">How it works</a>
       <a href="#pros">For pros</a>
+      <a href="/account/">Log in</a>
       <a href="#" class="btn" data-start>Get started</a>
     </nav>
   </div>
@@ -195,7 +196,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:1rem}
 <footer>
   <div class="wrap">
     <span>© 2026 Home Key Clean. Pros are independent contractors.</span>
-    <span><a href="/services/">Services</a> · <a href="/areas/">Areas</a> · <a href="/pro/">Pro login</a> · HomeKeyClean.com</span>
+    <span><a href="/services/">Services</a> · <a href="/areas/">Areas</a> · <a href="/account/">Log in</a> · <a href="/pro/">Pro login</a> · HomeKeyClean.com</span>
   </div>
 </footer>
 
@@ -207,6 +208,8 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:1rem}
   <div class="step" id="body"></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/config.js"></script>
 <script src="/store.js"></script>
 <script>
 (function(){
@@ -248,11 +251,11 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:1rem}
     else if(id==="freq"){h=head("Is this a one-time job or recurring?")+opts(["One time","Weekly","Every 2 weeks","Monthly","Not sure yet"],"freq")}
     else if(id==="det"){h=head("Anything else the pros should know?","Optional. Share details like access, pets or special requests.")+'<label class="sr" for="f">Details</label><textarea id="f"></textarea>'+next()}
     else if(id==="zip"){h=head("Where is the job?","We’ll find pros who serve your area.")+'<label for="f">ZIP code</label><input id="f" inputmode="numeric" maxlength="5" autocomplete="postal-code"><p class="err" role="alert"></p>'+next()}
-    else if(id==="contact"){h=head("Almost done. How can pros reach you?","Pros only see your contact details after they accept your request.")+'<label for="n">Name</label><input id="n" autocomplete="name"><label for="e">Email</label><input id="e" type="email" autocomplete="email"><label for="p">Phone (optional)</label><input id="p" type="tel" autocomplete="tel"><p class="err" role="alert"></p><button class="btn" type="button" id="go">Find me pros</button>'}
+    else if(id==="contact"){var L=!!D.login;h=head(L?"Log in to see your pros":"Create your account to see your pros",L?"Welcome back.":"It’s free. Pros see your contact details only after they accept your request, and you can track all your jobs in one place.")+(L?'':'<label for="n">Name</label><input id="n" autocomplete="name"><label for="p">Phone (optional)</label><input id="p" type="tel" autocomplete="tel">')+'<label for="e">Email</label><input id="e" type="email" autocomplete="email"><label for="pw">Password'+(L?'':' (8+ characters)')+'</label><input id="pw" type="password" autocomplete="'+(L?'current-password':'new-password')+'"><p class="err" role="alert"></p><button class="btn" type="button" id="go">'+(L?'Log in and find my pros':'Create account and find my pros')+'</button><button class="link" type="button" id="sw" style="margin-top:1rem">'+(L?'New here? Create an account':'Already have an account? Log in')+'</button>'}
     else{h=doneHtml()}
     body.className="step"+(id==="done"?" done":"");body.innerHTML=h;
     var f=$("f");if(f&&id==="det")f.value=D.det||"";else if(f)f.value=D.zip||"";
-    if(id==="contact"){$("n").value=D.name||"";$("e").value=D.email||"";$("p").value=D.phone||""}
+    if(id==="contact"){if($("n"))$("n").value=D.name||"";$("e").value=D.email||"";if($("p"))$("p").value=D.phone||""}
     if(id==="done"){var m=mail();$("sm").textContent=D.svc+" in "+D.zip;$("ml").href=m}
     var t=$("fh");t.setAttribute("tabindex","-1");t.focus({preventScroll:true});flow.scrollTop=0;
     bind(id)
@@ -277,11 +280,27 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:1rem}
       if(id==="zip"){if(!/^\d{5}$/.test(f.value.trim())){er.textContent="Enter a 5-digit ZIP code.";f.focus();return}D.zip=f.value.trim()}
       if(id==="det")D.det=f.value.trim();
       go(1)});
-    var g=$("go");if(g)g.addEventListener("click",function(){
-      var er=body.querySelector(".err");D.name=$("n").value.trim();D.email=$("e").value.trim();D.phone=$("p").value.trim();
-      if(!D.name){er.textContent="Enter your name.";$("n").focus();return}
+    var g=$("go");if(g)g.addEventListener("click",async function(){
+      var er=body.querySelector(".err"),L=!!D.login,pw=$("pw").value;er.textContent="";
+      D.email=$("e").value.trim();if(!L){D.name=$("n").value.trim();D.phone=$("p").value.trim()}
+      if(!L&&!D.name){er.textContent="Enter your name.";$("n").focus();return}
       if(!/^\S+@\S+\.\S+$/.test(D.email)){er.textContent="Enter a valid email address.";$("e").focus();return}
-      window.location.href="/matches/?id="+HKC.submit({svc:D.svc,q:[].concat(D.q||[]),when:D.when,freq:D.freq,det:D.det||"",zip:D.zip,name:D.name,email:D.email,phone:D.phone||""})})
+      if(L&&!pw){er.textContent="Enter your password.";$("pw").focus();return}
+      if(!L&&pw.length<8){er.textContent="Use a password with at least 8 characters.";$("pw").focus();return}
+      if(!HKC.ready){er.textContent="The site isn’t connected to its database yet. See SETUP.md.";return}
+      g.disabled=true;
+      try{
+        var prof;
+        if(L){prof=await HKC.signIn(D.email,pw)}
+        else{var r=await HKC.signUp("client",{name:D.name,email:D.email,phone:D.phone,password:pw});
+          if(!r.session){HKC.saveDraft(D);er.textContent="We saved your request. Check your email to confirm your account, then log in to see your pros.";g.disabled=false;return}
+          prof=r.profile}
+        if(prof.role!=="client"){await HKC.signOut();throw new Error("This is a pro account. Use a client account, or create a new one with a different email.")}
+        var id=await HKC.submitRequest(D);try{localStorage.removeItem("hkc.draft")}catch(x){}
+        window.location.href="/matches/?id="+id
+      }catch(x){er.textContent=x.message;g.disabled=false}
+    });
+    var sw=$("sw");if(sw)sw.addEventListener("click",function(){D.login=!D.login;render()})
   }
   function mail(){
     var q=[].concat(D.q||[]).join(", ");

@@ -35,3 +35,9 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 table{width:100%;border-collapse:collapse}td,th{padding:.5rem;border-bottom:1px solid var(--line);text-align:left}
 .toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%);background:var(--pine);color:#F5F9F8;padding:.7rem 1.2rem;border-radius:999px;display:none;z-index:30}
 @media (max-width:820px){.pro{grid-template-columns:auto 1fr}.act{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}.two2,.msgs{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}
+
+[hidden]{display:none!important}
+code{background:var(--mist);padding:.1rem .35rem;border-radius:4px}
+caption.sr{position:absolute}
+.m small{opacity:.7}
+.cardx table{margin-top:.5rem}
