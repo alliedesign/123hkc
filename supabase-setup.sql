@@ -100,6 +100,11 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from offers where request_id = rid and pro_id = auth.uid() and status <> 'offered');
 $$;
 
+revoke all on function public.is_client_of(uuid) from public, anon;
+revoke all on function public.is_pro_on(uuid) from public, anon;
+grant execute on function public.is_client_of(uuid) to authenticated;
+grant execute on function public.is_pro_on(uuid) to authenticated;
+
 -- Lock everything down, then grant only what the site needs.
 alter table public.profiles enable row level security;
 alter table public.pros     enable row level security;
