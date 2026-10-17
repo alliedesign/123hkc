@@ -80,6 +80,15 @@ create table if not exists public.charges (
   unique (request_id, pro_id)
 );
 
+alter table public.charges add column if not exists payment_intent text;
+alter table public.charges add column if not exists status text not null default 'recorded';
+
+-- Stripe customer for each pro. Never readable from the website (service role only).
+create table if not exists public.pro_billing (
+  pro_id uuid primary key references public.pros(id) on delete cascade,
+  stripe_customer_id text not null
+);
+
 -- Helper checks (security definer so row-level policies don't call each other in a loop)
 create or replace function public.is_client_of(rid uuid) returns boolean
 language sql stable security definer set search_path = public as $$
@@ -99,8 +108,9 @@ alter table public.offers   enable row level security;
 alter table public.messages enable row level security;
 alter table public.reviews  enable row level security;
 alter table public.charges  enable row level security;
+alter table public.pro_billing enable row level security;
 
-revoke all on public.profiles, public.pros, public.requests, public.offers, public.messages, public.reviews, public.charges from anon, authenticated;
+revoke all on public.profiles, public.pros, public.requests, public.offers, public.messages, public.reviews, public.charges, public.pro_billing from anon, authenticated;
 
 grant select on public.profiles, public.pros, public.requests, public.offers, public.messages, public.reviews, public.charges to authenticated;
 grant insert (id, role, name, email, phone) on public.profiles to authenticated;
@@ -214,20 +224,31 @@ begin
   end if;
 end $$;
 
--- Pro accepts (records the $20 lead fee) or declines (free).
+-- Pro declines (free). Accepting costs $20 and is done only by the server-side billing function,
+-- which charges the pro's card first and then calls finalize_accept below.
 create or replace function public.respond_offer(p_offer uuid, p_accept boolean) returns void
 language plpgsql security definer set search_path = public as $$
 declare o offers%rowtype;
 begin
+  if p_accept then raise exception 'Accepting a request requires the $20 card payment. Use the Accept button in the pro portal.'; end if;
   select * into o from offers where id = p_offer and pro_id = auth.uid() for update;
   if not found then raise exception 'Request not found'; end if;
   if o.status <> 'requested' then raise exception 'This request can no longer be changed'; end if;
-  if p_accept then
-    update offers set status = 'accepted', updated_at = now() where id = o.id;
-    insert into charges (pro_id, request_id, amount) values (o.pro_id, o.request_id, 20) on conflict do nothing;
-  else
-    update offers set status = 'declined', updated_at = now() where id = o.id;
-  end if;
+  update offers set status = 'declined', updated_at = now() where id = o.id;
+end $$;
+
+-- Called only by the billing function (service role) after the $20 payment succeeds.
+create or replace function public.finalize_accept(p_offer uuid, p_pro uuid, p_pi text) returns void
+language plpgsql security definer set search_path = public as $$
+declare o offers%rowtype;
+begin
+  select * into o from offers where id = p_offer and pro_id = p_pro for update;
+  if not found then raise exception 'Request not found'; end if;
+  if o.status = 'accepted' then return; end if;
+  if o.status <> 'requested' then raise exception 'This request can no longer be changed'; end if;
+  update offers set status = 'accepted', updated_at = now() where id = o.id;
+  insert into charges (pro_id, request_id, amount, payment_intent, status) values (o.pro_id, o.request_id, 20, p_pi, 'paid')
+    on conflict (request_id, pro_id) do update set payment_intent = excluded.payment_intent, status = 'paid';
 end $$;
 
 -- A pro's requests. Customer contact details are included only after the pro accepts.
@@ -268,6 +289,7 @@ revoke all on function public.submit_request(text, text[], text, text, text, tex
 revoke all on function public.request_quotes(uuid, uuid[]) from public, anon;
 revoke all on function public.send_message(uuid, uuid, text) from public, anon;
 revoke all on function public.respond_offer(uuid, boolean) from public, anon;
+revoke all on function public.finalize_accept(uuid, uuid, text) from public, anon, authenticated;
 revoke all on function public.pro_leads() from public, anon;
 revoke all on function public.post_review(uuid, uuid, int, text) from public, anon;
 grant execute on function public.submit_request(text, text[], text, text, text, text) to authenticated;
@@ -276,6 +298,12 @@ grant execute on function public.send_message(uuid, uuid, text) to authenticated
 grant execute on function public.respond_offer(uuid, boolean) to authenticated;
 grant execute on function public.pro_leads() to authenticated;
 grant execute on function public.post_review(uuid, uuid, int, text) to authenticated;
+
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function public.finalize_accept(uuid, uuid, text) to service_role;
+  end if;
+end $$;
 
 -- Live message updates
 do $$ begin

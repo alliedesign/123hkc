@@ -68,6 +68,10 @@ var H={SV:SV,ready:ready,esc:esc,stars:stars,pz:pz,fz:fz,dt:dt,d0:d0,rpc:rpc,not
  respond:function(offer,yes){return rpc("respond_offer",{p_offer:offer,p_accept:yes})},
  review:function(req,pro,r,t){return rpc("post_review",{p_request:req,p_pro:pro,p_rating:r,p_body:t||""})},
  leads:function(){return rpc("pro_leads")},
+ billing:async function(action,body){need();
+  var r=await sb.functions.invoke("billing",{body:Object.assign({action:action},body||{})});
+  if(r.error){var m=r.error.message;try{var j=await r.error.context.json();if(j&&j.error)m=j.error}catch(x){}throw new Error(m)}
+  if(r.data&&r.data.error)throw new Error(r.data.error);return r.data},
  proRow:proRow,
  myReviews:async function(){var p=await proRow();return ok(await sb.from("reviews").select("*").eq("pro_id",p.id).order("created_at",{ascending:false}))},
  charges:async function(){need();return ok(await sb.from("charges").select("id,amount,created_at,requests(svc)").order("created_at",{ascending:false}))},
