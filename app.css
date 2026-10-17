@@ -41,3 +41,5 @@ code{background:var(--mist);padding:.1rem .35rem;border-radius:4px}
 caption.sr{position:absolute}
 .m small{opacity:.7}
 .cardx table{margin-top:.5rem}
+
+.legal{max-width:760px}.legal h2{font-size:1.25rem;margin:1.8rem 0 .5rem}.legal ul{padding-left:1.2rem}.legal li{margin:.35rem 0}.legal p,.legal li{line-height:1.6}

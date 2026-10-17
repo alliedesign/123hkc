@@ -31,9 +31,10 @@ async function boot(){
   var s=(await sb.auth.getSession()).data.session;
   if(!s)return{ready:true,user:null};
   return{ready:true,user:s.user,profile:await ensureProfile(s.user)}}
+function smsBox(id){return '<label class="ck" for="'+id+'" style="display:flex;gap:.6rem;align-items:flex-start;font-weight:400;font-size:.85rem;line-height:1.45;margin:.9rem 0"><input type="checkbox" id="'+id+'" style="margin-top:.2rem;flex:none;width:auto"><span>Yes, text me about my requests, quotes and account activity at the mobile number above. (Optional)<br><span style="color:var(--muted)">By checking this box you agree to receive text messages from Home Key Clean. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is not a condition of using the service. See our <a href="/terms/#sms">Terms</a> and <a href="/privacy/">Privacy Policy</a>.</span></span></label>'}
 async function signUp(role,f){
   need();
-  var r=await sb.auth.signUp({email:f.email,password:f.password,options:{data:Object.assign({role:role,name:f.name,phone:f.phone||""},f.pro||{})}});
+  var r=await sb.auth.signUp({email:f.email,password:f.password,options:{data:Object.assign({role:role,name:f.name,phone:f.phone||"",sms_consent:!!f.sms,sms_consent_at:f.sms?new Date().toISOString():null},f.pro||{})}});
   if(r.error)throw new Error(r.error.message);
   var u=r.data.user;
   if(u&&u.identities&&!u.identities.length)throw new Error("An account with this email already exists. Log in instead.");
@@ -57,7 +58,7 @@ function onChange(tables,cb){
   var ch=sb.channel("c"+Math.random().toString(36).slice(2));
   tables.forEach(function(t){ch.on("postgres_changes",{event:"*",schema:"public",table:t},function(){cb()})});
   ch.subscribe();return function(){sb.removeChannel(ch)}}
-var H={SV:SV,ready:ready,esc:esc,stars:stars,pz:pz,fz:fz,dt:dt,d0:d0,rpc:rpc,notice:notice,boot:boot,signUp:signUp,signIn:signIn,signOut:signOut,saveDraft:saveDraft,submitRequest:submitRequest,flushDraft:flushDraft,onChange:onChange,
+var H={smsBox:smsBox,SV:SV,ready:ready,esc:esc,stars:stars,pz:pz,fz:fz,dt:dt,d0:d0,rpc:rpc,notice:notice,boot:boot,signUp:signUp,signIn:signIn,signOut:signOut,saveDraft:saveDraft,submitRequest:submitRequest,flushDraft:flushDraft,onChange:onChange,
  request:async function(id){need();return ok(await sb.from("requests").select("*").eq("id",id).maybeSingle())},
  offersFor:async function(id){need();return ok(await sb.from("offers").select("id,status,reviewed,pro_id,created_at,pros(id,name,biz,bio,services,rating,review_count)").eq("request_id",id).order("created_at"))},
  reviewsFor:async function(ids){need();return ids.length?ok(await sb.from("reviews").select("*").in("pro_id",ids).order("created_at",{ascending:false})):[]},
@@ -84,7 +85,7 @@ var H={SV:SV,ready:ready,esc:esc,stars:stars,pz:pz,fz:fz,dt:dt,d0:d0,rpc:rpc,not
   +'<form id="fup" class="cardx" hidden novalidate><h2>'+(pro?"Create your pro account":"Create your account")+'</h2>'
   +'<label for="su-n">Your name</label><input id="su-n" autocomplete="name">'
   +(pro?'<label for="su-b">Business name</label><input id="su-b">':'')
-  +'<label for="su-e">Email</label><input id="su-e" type="email" autocomplete="email"><label for="su-ph">Phone</label><input id="su-ph" type="tel" autocomplete="tel" required><label for="su-p">Password (8+ characters)</label><input id="su-p" type="password" autocomplete="new-password">'
+  +'<label for="su-e">Email</label><input id="su-e" type="email" autocomplete="email"><label for="su-ph">Phone</label><input id="su-ph" type="tel" autocomplete="tel" required>'+smsBox("su-sms")+'<label for="su-p">Password (8+ characters)</label><input id="su-p" type="password" autocomplete="new-password">'
   +(pro?'<fieldset><legend>Services you offer</legend>'+SV.map(function(s){return'<label class="ck"><input type="checkbox" name="svc" value="'+esc(s)+'"> '+esc(s)+'</label>'}).join("")+'</fieldset><label for="su-z">Areas you serve</label><input id="su-z" placeholder="ZIP codes or 3-digit prefixes, e.g. 90210, 900-918"><p class="sumline" style="margin:.3rem 0 1rem;font-size:.85rem">You can type full 5-digit ZIP codes (e.g. 90210, 90001). Matching uses the first 3 digits, so each one covers its whole area, and the saved list shows as 3 digits (e.g. 902, 900). Ranges work too: 900-918.</p><label for="su-bio">About you</label><textarea id="su-bio"></textarea>':'')
   +'<p class="err" role="alert"></p><button class="btn">Create account</button></form>'},
  bindAuth:function(root,role,done){
@@ -102,7 +103,7 @@ var H={SV:SV,ready:ready,esc:esc,stars:stars,pz:pz,fz:fz,dt:dt,d0:d0,rpc:rpc,not
     if(prof.role!==role){await signOut();throw new Error(pro?"This is a client account. Log in on the client page instead.":"This is a pro account. Log in on the pro page instead.")}
     done(prof)});
   run(fup,async function(er){
-    var g=function(i){return root.querySelector("#"+i).value.trim()},f={name:g("su-n"),email:g("su-e"),phone:g("su-ph"),password:root.querySelector("#su-p").value};
+    var g=function(i){return root.querySelector("#"+i).value.trim()},f={name:g("su-n"),email:g("su-e"),phone:g("su-ph"),sms:root.querySelector("#su-sms").checked,password:root.querySelector("#su-p").value};
     if(!f.name)throw new Error("Enter your name.");
     if(!/^\S+@\S+\.\S+$/.test(f.email))throw new Error("Enter a valid email address.");
     if(f.phone.replace(/\D/g,"").length<10)throw new Error("Enter a valid phone number (at least 10 digits).");
